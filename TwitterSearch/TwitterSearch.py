@@ -419,7 +419,7 @@ class TwitterSearch(object):
 
         r = requests.get(self._base_url + self._lang_url,
                          # auth=self.__oauth,
-                         headers = self.headers
+                         headers = self.headers,
                          proxies={"https": self.__proxy})
 
         self.__response['meta'] = r.headers
