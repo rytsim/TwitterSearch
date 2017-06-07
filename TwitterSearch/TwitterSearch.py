@@ -136,6 +136,15 @@ class TwitterSearch(object):
         # statistics
         self.__statistics = [0,0]
 
+                # callback
+        self.__callback = None
+
+        # # verify
+        # if "verify" in attr:
+        #     self.authenticate(attr["verify"])
+        # else:
+        #     self.authenticate(True)
+
     def get_rate_limit(self):
         r = requests.get(self.REQUEST_RATE_LIMIT, headers=self.headers)
         return r.json()['resources']['search']
