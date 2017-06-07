@@ -8,6 +8,13 @@ from .TwitterSearchOrder import TwitterSearchOrder
 from .TwitterUserOrder import TwitterUserOrder
 from .utils import py3k
 
+# bearer token stuff...
+import base64
+import json
+import sys
+from urllib.request import urlopen, Request
+from urllib.error import HTTPError
+
 
 try:
     from urllib.parse import parse_qs  # python3
@@ -45,6 +52,14 @@ class TwitterSearch(object):
     _lang_url = 'help/languages.json'
     _user_url = 'statuses/user_timeline.json'
 
+    API_ENDPOINT = 'https://api.twitter.com'
+    API_VERSION = '1.1'
+    REQUEST_TOKEN_URL = '%s/oauth2/token' % API_ENDPOINT
+    REQUEST_RATE_LIMIT = '%s/%s/application/rate_limit_status.json' % \
+                         (API_ENDPOINT, API_VERSION)
+
+
+
     # see https://dev.twitter.com/docs/error-codes-responses
     exceptions = {
         400: 'Bad Request: The request was invalid',
@@ -69,8 +84,7 @@ class TwitterSearch(object):
               'be serviced due to some failure within our stack'),
     }
 
-    def __init__(self, consumer_key, consumer_secret,
-                 access_token, access_token_secret, **attr):
+    def __init__(self, consumer_key, consumer_secret, **attr):
         """ Constructor
 
         :param consumer_key: Consumer key (app related)
@@ -91,9 +105,23 @@ class TwitterSearch(object):
         self.__consumer_key = consumer_key
         self.__consumer_secret = consumer_secret
 
-        # user
-        self.__access_token = access_token
-        self.__access_token_secret = access_token_secret
+        """Obtain a bearer token."""
+        bearer_token = '%s:%s' % (consumer_key, consumer_secret)
+        encoded_bearer_token = base64.b64encode(bearer_token.encode('ascii'))
+        request = Request(self.REQUEST_TOKEN_URL)
+        request.add_header('Content-Type',
+                           'application/x-www-form-urlencoded;charset=UTF-8')
+        request.add_header('Authorization',
+                           'Basic %s' % encoded_bearer_token.decode('utf-8'))
+
+        request.data = 'grant_type=client_credentials'.encode('ascii')
+
+        response = urlopen(request)
+        raw_data = response.read().decode('utf-8')
+        data = json.loads(raw_data)
+        my_token = data['access_token']
+
+        self.headers={'Authorization':'Bearer %s' % my_token}
 
         # init internal variables
         self.__response = {}
@@ -108,14 +136,12 @@ class TwitterSearch(object):
         # statistics
         self.__statistics = [0,0]
 
-        # callback
-        self.__callback = None
+    def get_rate_limit(self):
+        r = requests.get(self.REQUEST_RATE_LIMIT, headers=self.headers)
+        return r.json()['resources']['search']
 
-        # verify
-        if "verify" in attr:
-            self.authenticate(attr["verify"])
-        else:
-            self.authenticate(True)
+
+
 
     def __repr__(self):
         """ Returns the class and its access token
@@ -238,7 +264,8 @@ class TwitterSearch(object):
                                      else self._user_url)
 
         r = requests.get(endpoint + url,
-                         auth=self.__oauth,
+                         # auth=self.__oauth,
+                         headers =self.headers
                          proxies={"https": self.__proxy})
 
         self.__response['meta'] = r.headers
@@ -391,7 +418,8 @@ class TwitterSearch(object):
             raise TwitterSearchException(1010)
 
         r = requests.get(self._base_url + self._lang_url,
-                         auth=self.__oauth,
+                         # auth=self.__oauth,
+                         headers = self.headers
                          proxies={"https": self.__proxy})
 
         self.__response['meta'] = r.headers
